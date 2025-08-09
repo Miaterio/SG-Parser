@@ -17,11 +17,14 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install Python dependencies
-COPY requirements.txt .
+# Copy requirements from parent directory and install Python dependencies
+COPY ../requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy image_parser.py from parent directory (needed for import)
+COPY ../image_parser.py .
+
+# Copy web-parser application code
 COPY . .
 
 # Create necessary directories
