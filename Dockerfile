@@ -39,8 +39,8 @@ ENV CHROME_ARGS=--no-sandbox,--headless,--disable-gpu,--disable-dev-shm-usage,--
 ENV SELENIUM_HEADLESS=true
 ENV FLASK_ENV=production
 
-# Expose port (Render will set PORT env var)
-EXPOSE $PORT
+# Expose port (informational; Render will still inject PORT at runtime)
+EXPOSE 5000
 
 # Run the application
 CMD gunicorn --bind 0.0.0.0:$PORT --timeout 300 --workers 1 app:app
