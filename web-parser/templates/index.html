@@ -1,51 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SuperGra Parser</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .upload-form {
-            max-width: 500px;
-            margin: 50px auto;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .flash-messages {
-            margin: 20px auto;
-            max-width: 500px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <div class="flash-messages">
-                    {% for message in messages %}
-                        <div class="alert alert-info alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-        {% endwith %}
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Загрузка CSV для парсинга изображений</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  </head>
+  <body class="bg-light">
+    <div class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title">Загрузите CSV файл</h5>
+              {% with messages = get_flashed_messages() %}
+              {% if messages %}
+              <div class="alert alert-info">
+                {% for message in messages %}
+                <div>{{ message }}</div>
+                {% endfor %}
+              </div>
+              {% endif %}
+              {% endwith %}
 
-        <div class="upload-form">
-            <h2 class="text-center mb-4">SuperGra Parser</h2>
-            <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+              <form action="/upload" method="post" enctype="multipart/form-data">
                 <div class="mb-3">
-                    <label for="file" class="form-label">Выберите CSV файл</label>
-                    <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                  <input class="form-control" type="file" name="file" accept=".csv" required />
                 </div>
-                <button type="submit" class="btn btn-primary w-100">Загрузить и начать парсинг</button>
-            </form>
-        </div>
-    </div>
+                <button class="btn btn-primary" type="submit">Загрузить и запустить</button>
+              </form>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
+              <hr/>
+              <p class="text-muted mb-0">После загрузки мы создадим ID задачи и перенаправим вас на страницу статуса, где можно будет следить за прогрессом и скачать ZIP архив.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
 </html>

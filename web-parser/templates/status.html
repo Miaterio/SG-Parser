@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Статус задачи</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  </head>
+  <body class="bg-light">
+    <div class="container py-5">
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h5 class="card-title">Статус задачи</h5>
+              <p class="mb-1"><strong>ID:</strong> {{ job.job_id }}</p>
+              <p class="mb-1"><strong>Файл:</strong> {{ job.filename }}</p>
+              <p class="mb-3"><strong>Статус:</strong> <span id="status">{{ job.status }}</span></p>
+
+              <div class="progress mb-3" style="height: 24px;">
+                <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%">0%</div>
+              </div>
+
+              <ul id="messages" class="list-group mb-3" style="max-height: 240px; overflow-y: auto;"></ul>
+
+              <div id="downloadSection" class="d-none">
+                <a id="downloadLink" class="btn btn-success" href="#">Скачать ZIP</a>
+              </div>
+
+              <div class="mt-3">
+                <a class="btn btn-secondary" href="{{ url_for('index') }}">На главную</a>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const jobId = "{{ job.job_id }}";
+      const progressBar = document.getElementById('progressBar');
+      const statusEl = document.getElementById('status');
+      const messagesEl = document.getElementById('messages');
+      const downloadSection = document.getElementById('downloadSection');
+      const downloadLink = document.getElementById('downloadLink');
+
+      function updateProgress(completed, total) {
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        progressBar.style.width = `${percent}%`;
+        progressBar.textContent = `${percent}%`;
+        progressBar.setAttribute('aria-valuenow', percent);
+      }
+
+      function addMessages(msgs) {
+        messagesEl.innerHTML = '';
+        msgs.forEach(m => {
+          const li = document.createElement('li');
+          li.className = 'list-group-item';
+          li.textContent = m;
+          messagesEl.appendChild(li);
+        });
+      }
+
+      async function poll() {
+        try {
+          const res = await fetch(`/api/status/${jobId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          statusEl.textContent = data.status;
+          updateProgress(data.progress.completed, data.progress.total);
+          addMessages(data.messages);
+
+          if (data.download_ready) {
+            downloadSection.classList.remove('d-none');
+            downloadLink.href = `/download/${jobId}`;
+            progressBar.classList.remove('progress-bar-animated');
+          }
+
+          if (data.status === 'completed' || data.status === 'failed') {
+            clearInterval(timer);
+            progressBar.classList.remove('progress-bar-animated');
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      const timer = setInterval(poll, 1500);
+      poll();
+    </script>
+  </body>
+</html>

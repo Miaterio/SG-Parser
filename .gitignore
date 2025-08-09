@@ -126,3 +126,6 @@ dmypy.json
 /downloaded_images/
 logs.txt
 Test-image.zip
+# Web parser runtime artifacts
+web-parser/uploads/
+web-parser/temp/

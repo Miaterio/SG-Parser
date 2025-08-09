@@ -15,6 +15,13 @@ import re
 import subprocess
 import shutil
 
+# Try loading environment variables from a .env file if available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # Импорт Selenium
 try:
     from selenium import webdriver
@@ -40,7 +47,11 @@ DEFAULT_DOWNLOAD_FOLDER = 'downloaded_images' # Папка по умолчани
 
 # Укажите путь к вашему chromedriver, если он не в PATH, иначе оставьте None
 # Пример: WEBDRIVER_PATH = '/path/to/your/chromedriver'
-WEBDRIVER_PATH = None
+WEBDRIVER_PATH = os.environ.get('WEBDRIVER_PATH') or None
+# Необязательная настройка пути к бинарнику Chrome/Chromium (например, для Heroku или Docker)
+CHROME_BINARY = os.environ.get('CHROME_BINARY') or os.environ.get('GOOGLE_CHROME_BIN')
+# Дополнительные аргументы для Chrome через переменную окружения, например: "--remote-debugging-port=9222 --lang=ru"
+CHROME_ARGS = os.environ.get('CHROME_ARGS', '')
 
 MAX_WORKERS = 4 # Количество потоков по умолчанию
 
@@ -803,6 +814,15 @@ def process_single_row(row_data, download_dir, headless, status_callback=None): 
             options.add_argument('--disable-popup-blocking'); options.add_argument('--ignore-certificate-errors')
             options.add_argument('--disable-extensions'); options.add_argument('--profile-directory=Default'); options.add_argument("--incognito")
             options.add_argument("--disable-plugins-discovery")
+            # Применяем путь к бинарнику Chrome при наличии
+            if CHROME_BINARY:
+                options.binary_location = CHROME_BINARY
+            # Применяем дополнительные аргументы из переменной окружения
+            if CHROME_ARGS:
+                for arg in CHROME_ARGS.split():
+                    a = arg.strip()
+                    if a:
+                        options.add_argument(a)
 
             if WEBDRIVER_PATH: service = Service(WEBDRIVER_PATH); driver = webdriver.Chrome(service=service, options=options)
             else:
