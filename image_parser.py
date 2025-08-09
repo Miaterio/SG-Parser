@@ -55,6 +55,10 @@ CHROME_ARGS = os.environ.get('CHROME_ARGS', '')
 
 MAX_WORKERS = 4 # Количество потоков по умолчанию
 
+# Ограничение параллельного Selenium (по умолчанию 1, регулируется через переменную окружения)
+SELENIUM_CONCURRENCY = int(os.environ.get('SELENIUM_CONCURRENCY', '1'))
+SELENIUM_SEMAPHORE = threading.BoundedSemaphore(SELENIUM_CONCURRENCY)
+
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
@@ -806,7 +810,8 @@ def process_single_row(row_data, download_dir, headless, status_callback=None): 
         driver = None; selenium_session = None
         try:
             options = Options();
-            if headless: options.add_argument('--headless')
+            options.page_load_strategy = 'eager'
+            if headless: options.add_argument('--headless=new')
             options.add_argument('--no-sandbox'); options.add_argument('--disable-dev-shm-usage'); options.add_argument('--disable-gpu')
             options.add_argument('--window-size=1920,1080'); options.add_argument(f'user-agent={random.choice(USER_AGENTS)}')
             options.add_experimental_option("excludeSwitches", ["enable-automation"]); options.add_experimental_option('useAutomationExtension', False)
@@ -817,12 +822,15 @@ def process_single_row(row_data, download_dir, headless, status_callback=None): 
             # Применяем путь к бинарнику Chrome при наличии
             if CHROME_BINARY:
                 options.binary_location = CHROME_BINARY
-            # Применяем дополнительные аргументы из переменной окружения
+            # Применяем дополнительные аргументы из переменной окружения (поддержка разделителей запятая/пробел)
             if CHROME_ARGS:
-                for arg in CHROME_ARGS.split():
-                    a = arg.strip()
+                for a in re.split(r'[\s,]+', CHROME_ARGS.strip()):
                     if a:
                         options.add_argument(a)
+
+            acquired = SELENIUM_SEMAPHORE.acquire(timeout=300)
+            if not acquired:
+                return False, "Selenium: таймаут ожидания свободного слота браузера. Уменьшите параллелизм."
 
             if WEBDRIVER_PATH: service = Service(WEBDRIVER_PATH); driver = webdriver.Chrome(service=service, options=options)
             else:
@@ -832,8 +840,17 @@ def process_single_row(row_data, download_dir, headless, status_callback=None): 
                 except ImportError: driver = webdriver.Chrome(options=options) # Полагаемся на PATH
                 except Exception as driver_init_err: return False, f"Ошибка инициализации ChromeDriver: {driver_init_err}."
 
+            driver.set_page_load_timeout(60)
             driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"})
-            driver.get(product_url)
+            # Навигация с повторной попыткой при таймауте
+            _nav_attempts = 2
+            for _attempt in range(_nav_attempts):
+                try:
+                    driver.get(product_url)
+                    break
+                except TimeoutException:
+                    if _attempt + 1 == _nav_attempts:
+                        raise
             WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.TAG_NAME, "body"))); time.sleep(random.uniform(1, 3))
             base_url = driver.current_url; domain = get_domain(base_url)
 
@@ -863,8 +880,14 @@ def process_single_row(row_data, download_dir, headless, status_callback=None): 
         except Exception as e: import traceback; return False, f"Непредвиденная ошибка при обработке {product_url} (Selenium): {e}\n{traceback.format_exc()}"
         finally:
             if driver:
-                try: driver.quit()
-                except Exception: pass
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+            try:
+                SELENIUM_SEMAPHORE.release()
+            except Exception:
+                pass
             if selenium_session: selenium_session.close()
 
     if image_url is None and not fast_parse_failed: return False, f"Не удалось найти URL главного изображения для {product_url} (быстрый парсинг)."
