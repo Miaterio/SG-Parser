@@ -7,6 +7,7 @@ import zipfile
 import shutil
 from datetime import datetime
 import logging
+import io
 
 # Добавляем родительскую директорию в путь, чтобы импортировать image_parser
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -240,6 +241,30 @@ def cleanup_job(job_id):
         del jobs[job_id]
         flash('Задача удалена')
     return redirect(url_for('index'))
+
+@app.route('/logs/<job_id>')
+def download_logs(job_id):
+    """Скачать логи задачи в txt формате"""
+    if job_id not in jobs:
+        flash('Задача не найдена')
+        return redirect(url_for('index'))
+
+    job = jobs[job_id]
+
+    lines = [
+        f"Job ID: {job.job_id}",
+        f"Filename: {job.filename}",
+        f"Status: {job.status}",
+        f"Created at: {job.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"Progress: {job.progress.get('completed', 0)}/{job.progress.get('total', 0)}",
+        "",
+        "Messages:",
+    ]
+    lines.extend(job.messages)
+
+    content = "\n".join(lines) + "\n"
+    buf = io.BytesIO(content.encode('utf-8'))
+    return send_file(buf, as_attachment=True, download_name=f"logs_{job.job_id}.txt", mimetype='text/plain')
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
