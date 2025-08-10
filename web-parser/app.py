@@ -244,25 +244,85 @@ def cleanup_job(job_id):
 
 @app.route('/logs/<job_id>')
 def download_logs(job_id):
-    """Скачать логи задачи в txt формате"""
+    """Скачать логи задачи в txt формате с фильтрацией:
+    1) Если сохранение успешно — только строка с URL и названием из CSV
+    2) Если ошибка — полный блок логов для соответствующей строки + URL и название из CSV
+    """
     if job_id not in jobs:
         flash('Задача не найдена')
         return redirect(url_for('index'))
 
     job = jobs[job_id]
 
-    lines = [
+    # Группируем сообщения по блокам обработки строк, начиная с "PROCESS_ROW: Начало обработки URL: ..."
+    sections = []
+    current = { 'header': None, 'url': None, 'filename': None, 'lines': [] }
+
+    for entry in job.messages:
+        # entry вида: "HH:MM:SS: message"
+        ts, sep, text = entry.partition(': ')
+        msg_text = text if sep else entry
+
+        if "PROCESS_ROW: Начало обработки URL:" in msg_text:
+            # Сохраняем предыдущий блок, если был
+            if current['header'] is not None or current['lines']:
+                sections.append(current)
+            # Начинаем новый блок
+            current = { 'header': entry, 'url': None, 'filename': None, 'lines': [entry] }
+            # Парсим URL и имя файла из стартовой строки
+            try:
+                url_marker = "URL: "
+                name_marker = ", Имя файла: "
+                ustart = msg_text.find(url_marker)
+                nstart = msg_text.find(name_marker)
+                if ustart != -1 and nstart != -1:
+                    url = msg_text[ustart + len(url_marker): nstart]
+                    filename = msg_text[nstart + len(name_marker):]
+                    current['url'] = url.strip()
+                    current['filename'] = filename.strip()
+            except Exception:
+                pass
+        else:
+            # Обычная строка лога текущего блока
+            current['lines'].append(entry)
+
+    # Добавляем финальный блок
+    if current['header'] is not None or current['lines']:
+        sections.append(current)
+
+    # Формируем отфильтрованный вывод
+    out_lines = [
         f"Job ID: {job.job_id}",
         f"Filename: {job.filename}",
-        f"Status: {job.status}",
         f"Created at: {job.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
-        f"Progress: {job.progress.get('completed', 0)}/{job.progress.get('total', 0)}",
         "",
         "Messages:",
     ]
-    lines.extend(job.messages)
 
-    content = "\n".join(lines) + "\n"
+    for sec in sections:
+        # Определяем успешность: ищем в блоке строку с "успешен:" и "Изображение успешно сохранено как:"
+        success = False
+        for entry in sec['lines']:
+            _ts, _sep, t = entry.partition(': ')
+            t = t if _sep else entry
+            if ("успешен:" in t) and ("Изображение успешно сохранено как:" in t):
+                success = True
+                break
+
+        url = sec.get('url') or ''
+        filename = sec.get('filename') or ''
+
+        if success:
+            # Только одна строка-резюме с оригинальным URL и названием из CSV
+            out_lines.append(f"УСПЕХ: {url} -> {filename}")
+        else:
+            # Ошибка/неуспех: добавляем заголовок и полный блок логов
+            if url or filename:
+                out_lines.append(f"ОШИБКА: {url} -> {filename}")
+            out_lines.extend(sec['lines'])
+        out_lines.append("")  # пустая строка между блоками
+
+    content = "\n".join(out_lines) + "\n"
     buf = io.BytesIO(content.encode('utf-8'))
     return send_file(buf, as_attachment=True, download_name=f"logs_{job.job_id}.txt", mimetype='text/plain')
 
