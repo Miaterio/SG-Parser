@@ -676,38 +676,72 @@ def download_image(session, image_url, save_path_base, status_callback=None):
 
         # --- Конвертация (если нужна) ---
         if needs_conversion:
-            magick_path = shutil.which('magick') # Проверяем наличие ImageMagick
-            if not magick_path:
-                _log_status(f"DOWNLOAD: ImageMagick ('magick') не найден в PATH. Невозможно конвертировать {initial_extension} в {target_extension}.", status_callback)
-                if os.path.exists(temp_save_path): os.remove(temp_save_path)
+            # Проверяем наличие ImageMagick: сначала 'magick', затем запасной вариант 'convert'
+            convert_path = shutil.which('magick') or shutil.which('convert')
+            if not convert_path:
+                _log_status(
+                    f"DOWNLOAD: ImageMagick ('magick' или 'convert') не найден в PATH. Невозможно конвертировать {initial_extension} в {target_extension}.",
+                    status_callback,
+                )
+                if os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
                 return False, f"Ошибка: ImageMagick не найден для конвертации {initial_extension}"
 
-            _log_status(f"DOWNLOAD: Запуск конвертации ImageMagick: {temp_save_path} -> {final_save_path}", status_callback)
-            command = [magick_path, temp_save_path, final_save_path]
+            exe_name = os.path.basename(convert_path)
+            _log_status(
+                f"DOWNLOAD: Запуск конвертации ({exe_name}): {temp_save_path} -> {final_save_path}",
+                status_callback,
+            )
+            command = [convert_path, temp_save_path, final_save_path]
             try:
-                result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=60) # Таймаут 60 сек
-                _log_status(f"DOWNLOAD: Конвертация успешна. stdout:\n{result.stdout}\nstderr:\n{result.stderr}", status_callback)
-                if os.path.exists(temp_save_path): os.remove(temp_save_path) # Удаляем временный файл
+                result = subprocess.run(
+                    command, check=True, capture_output=True, text=True, timeout=60
+                )  # Таймаут 60 сек
+                _log_status(
+                    f"DOWNLOAD: Конвертация успешна. stdout:\n{result.stdout}\nstderr:\n{result.stderr}",
+                    status_callback,
+                )
+                if os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)  # Удаляем временный файл
                 return True, f"Изображение успешно скачано и конвертировано в {os.path.basename(final_save_path)}"
-            except FileNotFoundError: # На случай, если shutil.which обманул
-                 _log_status(f"DOWNLOAD: Ошибка конвертации - команда 'magick' не найдена (FileNotFoundError).", status_callback)
-                 if os.path.exists(temp_save_path): os.remove(temp_save_path)
-                 return False, "Ошибка конвертации: команда magick не найдена"
+            except FileNotFoundError:  # На случай, если shutil.which обманул
+                _log_status(
+                    "DOWNLOAD: Ошибка конвертации - команда 'magick'/'convert' не найдена (FileNotFoundError).",
+                    status_callback,
+                )
+                if os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
+                return False, "Ошибка конвертации: команда ImageMagick не найдена"
             except subprocess.CalledProcessError as conv_err:
-                 _log_status(f"DOWNLOAD: Ошибка конвертации ImageMagick (код {conv_err.returncode}). Команда: {' '.join(command)}\nstdout:\n{conv_err.stdout}\nstderr:\n{conv_err.stderr}", status_callback)
-                 if os.path.exists(temp_save_path): os.remove(temp_save_path)
-                 if os.path.exists(final_save_path): os.remove(final_save_path) # Удаляем возможно частично созданный файл
-                 return False, f"Ошибка конвертации ImageMagick: {conv_err.stderr[:200]}"
+                _log_status(
+                    f"DOWNLOAD: Ошибка конвертации ImageMagick (код {conv_err.returncode}). Команда: {' '.join(command)}\nstdout:\n{conv_err.stdout}\nstderr:\n{conv_err.stderr}",
+                    status_callback,
+                )
+                if os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
+                if os.path.exists(final_save_path):
+                    os.remove(final_save_path)  # Удаляем возможно частично созданный файл
+                return False, f"Ошибка конвертации ImageMagick: {conv_err.stderr[:200]}"
             except subprocess.TimeoutExpired:
-                 _log_status(f"DOWNLOAD: Ошибка конвертации ImageMagick - превышен таймаут.", status_callback)
-                 if os.path.exists(temp_save_path): os.remove(temp_save_path)
-                 if os.path.exists(final_save_path): os.remove(final_save_path)
-                 return False, "Ошибка конвертации: превышен таймаут ImageMagick"
-            except Exception as conv_exc: # Другие возможные ошибки
-                 _log_status(f"DOWNLOAD: Непредвиденная ошибка при конвертации: {conv_exc}", status_callback)
-                 if os.path.exists(temp_save_path): os.remove(temp_save_path)
-                 if os.path.exists(final_save_path): os.remove(final_save_path)
-                 return False, f"Непредвиденная ошибка при конвертации: {conv_exc}"
+                _log_status(
+                    f"DOWNLOAD: Ошибка конвертации ImageMagick - превышен таймаут.",
+                    status_callback,
+                )
+                if os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
+                if os.path.exists(final_save_path):
+                    os.remove(final_save_path)
+                return False, "Ошибка конвертации: превышен таймаут ImageMagick"
+            except Exception as conv_exc:  # Другие возможные ошибки
+                _log_status(
+                    f"DOWNLOAD: Непредвиденная ошибка при конвертации: {conv_exc}",
+                    status_callback,
+                )
+                if os.path.exists(temp_save_path):
+                    os.remove(temp_save_path)
+                if os.path.exists(final_save_path):
+                    os.remove(final_save_path)
+                return False, f"Непредвиденная ошибка при конвертации: {conv_exc}"
 
         # --- Если конвертация не нужна ---
         else:
