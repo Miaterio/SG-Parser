@@ -300,12 +300,12 @@ def download_logs(job_id):
     ]
 
     for sec in sections:
-        # Определяем успешность: ищем в блоке строку с "успешен:" и "Изображение успешно сохранено как:"
+        # Определяем успешность: строка финального сохранения
         success = False
         for entry in sec['lines']:
             _ts, _sep, t = entry.partition(': ')
             t = t if _sep else entry
-            if ("успешен:" in t) and ("Изображение успешно сохранено как:" in t):
+            if "Изображение успешно сохранено как:" in t:
                 success = True
                 break
 
